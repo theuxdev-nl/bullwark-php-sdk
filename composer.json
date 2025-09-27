@@ -1,5 +1,5 @@
 {
-  "name": "dutchbull95/bullwark-php-sdk",
+  "name": "theuxdev/bullwark-php-sdk",
   "description": "PHP SDK for integration of the Bullwark Authentication serviice.",
   "license": "MIT",
   "type": "library",
@@ -10,7 +10,8 @@
   },
   "authors": [
     {
-      "name": "dutchbull95"
+      "name": "Paul 'Bull' Brouwer",
+      "email": "paul@theuxdev.com"
     }
   ],
   "require": {
