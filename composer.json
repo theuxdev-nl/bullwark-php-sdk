@@ -1,0 +1,23 @@
+{
+  "name": "dutchbull95/bullwark-php-sdk",
+  "description": "PHP SDK for integration of the Bullwark Authentication serviice.",
+  "license": "MIT",
+  "type": "library",
+  "autoload": {
+    "psr-4": {
+      "BullwarkSdk\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "dutchbull95"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "guzzlehttp/guzzle": "^7.0",
+    "ext-openssl": "*",
+    "ext-json": "*",
+    "firebase/php-jwt": "^6.11"
+  }
+}
