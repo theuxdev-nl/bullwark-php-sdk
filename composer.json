@@ -16,9 +16,14 @@
   ],
   "require": {
     "php": ">=7.4",
-    "guzzlehttp/guzzle": "^7.0",
     "ext-openssl": "*",
     "ext-json": "*",
-    "firebase/php-jwt": "^6.11"
+    "firebase/php-jwt": "^6.11",
+    "php-http/discovery": "^1.20"
+  },
+  "config": {
+    "allow-plugins": {
+      "php-http/discovery": true
+    }
   }
 }

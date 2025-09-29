@@ -1,152 +1,193 @@
 <?php
+
 namespace BullwarkSdk;
 
-use BullwarkSdk\Exceptions\InvalidSignatureException;
-use GuzzleHttp\Client;
-use GuzzleHttp\Cookie\CookieJar;
-use GuzzleHttp\Exception\GuzzleException;
+use BullwarkSdk\Exceptions\JwkKidNotFoundException;
+use Psr\Http\Client\ClientExceptionInterface;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use BullwarkSdk\Exceptions\ApiRequestException;
 
-class ApiClient {
+
+class ApiClient
+{
     private AuthConfig $authConfig;
     private AuthState $authState;
 
-    private Client $apiClient;
-    private Client $jwkClient;
-    
-    public function __construct(AuthConfig $authConfig, AuthState $authState)
+    private ClientInterface $httpClient;
+    private RequestFactoryInterface $requestFactory;
+    private StreamFactoryInterface $streamFactory;
+
+    public function __construct(AuthConfig $authConfig, AuthState $authState, ClientInterface $httpClient, RequestFactoryInterface $requestFactory, StreamFactoryInterface $streamFactory)
     {
         $this->authConfig = $authConfig;
         $this->authState = $authState;
 
-        $this->apiClient = new Client([
-            'base_uri' => $this->authConfig->getApiUrl(),
-            'http_errors' => false,
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'X-Tenant-Uuid' => $this->authConfig->getTenantUuid(),
-            ]
-        ]);
+        $this->httpClient = $httpClient;
+        $this->requestFactory = $requestFactory;
+        $this->streamFactory = $streamFactory;
+    }
 
-        $this->jwkClient = new Client([
-            'base_uri' => $this->authConfig->getJwkUrl(),
-            'http_errors' => false,
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'X-Tenant-Uuid' => $this->authConfig->getTenantUuid(),
-            ]
-        ]);
+    private function withDefaultHeaders(\Psr\Http\Message\RequestInterface $request, array $extraHeaders = [])
+    {
+        $defaults = [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'X-Customer-Uuid' => $this->authConfig->getCustomerUuid(),
+            'X-Tenant-Uuid' => $this->authConfig->getTenantUuid(),
+        ];
+
+        foreach (array_merge($defaults, $extraHeaders) as $key => $value) {
+            $request = $request->withHeader($key, $value);
+        }
+
+        return $request;
     }
 
     /**
-     * @throws GuzzleException
-     * @throws \Exception
+     * @throws ClientExceptionInterface
      */
     public function login(string $email, string $password): array
     {
         $this->authState->isLoading = true;
-        $response = $this->apiClient->request('POST', 'login?plainRefresh=true', [
-            'body' => json_encode([
+
+        try {
+            $body = $this->streamFactory->createStream(json_encode([
                 'email' => $email,
-                'password' => $password
-            ])
-        ]);
+                'password' => $password,
+            ]));
 
-        if($response->getStatusCode() !== 200) {
-            throw new \Exception($response->getBody());
+            $request = $this->requestFactory->createRequest('POST', $this->authConfig->getApiUrl() . '/login?plainRefresh=true');
+            $request = $this->withDefaultHeaders($request);
+            $request = $request->withBody($body);
+
+            $response = $this->httpClient->sendRequest($request);
+            if ($response->getStatusCode() !== 200) {
+                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
+            }
+
+            $data = json_decode((string)$response->getBody(), true);
+
+            return [
+                'jwt' => $data['token'],
+                'refreshToken' => $data['refreshToken'],
+            ];
+        } finally {
+            $this->authState->isLoading = false;
         }
-
-        $data = json_decode($response->getBody(), true);
-        $this->authState->isLoading = false;
-        return [
-            'jwt' => $data['token'],
-            'refreshToken' => $data['refreshToken'],
-        ];
     }
 
 
     /**
-     * @throws \Exception
-     * @throws GuzzleException
+     * @throws ClientExceptionInterface
      */
-    public function refresh(?string $refreshToken = null): array
+    public function refresh(string $refreshToken): array
     {
         $this->authState->isLoading = true;
-        $response = $this->apiClient->request('POST', '/refresh?plainRefresh=true', [
-            'headers' => [
-                'X-Refresh-Token' => $refreshToken ?? $this->authState->storedRefreshToken,
-            ]
-        ]);
-        if($response->getStatusCode() !== 200) {
-            throw new \Exception($response->getBody());
-        }
 
-        $data = json_decode($response->getBody(), true);
-        $this->authState->isLoading = false;
-        return [
-            'jwt' => $data['token'],
-            'refreshToken' => $data['refreshToken'],
-        ];
+        try {
+            $body = $this->streamFactory->createStream(json_encode([
+                'refreshToken' => $refreshToken
+            ]));
+
+            $request = $this->requestFactory->createRequest('POST', $this->authConfig->getApiUrl() . '/refresh?plainRefresh=true');
+            $request = $this->withDefaultHeaders($request);
+            $request = $request->withBody($body);
+
+            $response = $this->httpClient->sendRequest($request);
+            if ($response->getStatusCode() !== 200) {
+                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
+            }
+
+            $data = json_decode((string)$response->getBody(), true);
+
+            return [
+                'jwt' => $data['token'],
+                'refreshToken' => $data['refreshToken'],
+            ];
+        } finally {
+            $this->authState->isLoading = false;
+        }
 
     }
 
     /**
-     * @throws GuzzleException
+     * @throws ClientExceptionInterface
      */
-    public function fetchUserDetails(?string $token = null): array
+    public function fetchUserDetails(string $jwt): array
     {
-        $response = $this->apiClient->request('GET', $this->authConfig->getApiUrl() . '/me', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $token ?? $this->authState->storedJwtToken,
-            ]
-        ]);
+        $this->authState->isLoading = true;
 
-        if($response->getStatusCode() !== 200) {
-            throw new \Exception($response->getBody());
+        try {
+
+            $request = $this->requestFactory->createRequest('GET', $this->authConfig->getApiUrl() . '/me');
+            $request = $this->withDefaultHeaders($request, [
+                'Authorization' => 'Bearer ' . $jwt,
+            ]);
+
+            $response = $this->httpClient->sendRequest($request);
+            if ($response->getStatusCode() !== 200) {
+                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
+            }
+
+
+            return json_decode($response->getBody(), true);
+        } finally {
+            $this->authState->isLoading = false;
         }
-
-        return json_decode($response->getBody(), true);
     }
 
 
     /**
-     * @throws GuzzleException
-     * @throws \Exception
+     * @throws JwkKidNotFoundException|ClientExceptionInterface
      */
     public function getPublicKey(string $kid): array
     {
-        $response = $this->jwkClient->get('http://localhost:8000/.well-known/jwks', [
-            'headers' => [
-                'X-Tenant-Uuid' => $this->authConfig->getTenantUuid(),
-            ]
-        ]);
-        if($response->getStatusCode() !== 200) {
-            $errorMessage = $response->getBody()->getContents();
-            throw new \Exception($errorMessage);
-        }
+        $this->authState->isLoading = true;
 
-        $data = json_decode($response->getBody()->getContents(), true)['keys'];
-        foreach($data as $d) {
-            if($d['kid'] === $kid){
-                return $d;
+        try {
+
+            $request = $this->requestFactory->createRequest('GET', $this->authConfig->getJwkUrl());
+            $request = $this->withDefaultHeaders($request);
+
+            $response = $this->httpClient->sendRequest($request);
+            if ($response->getStatusCode() !== 200) {
+                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
             }
+
+            $data = json_decode($response->getBody(), true)['keys'];
+            foreach ($data as $d) {
+                if ($d['kid'] === $kid) {
+                    return $d;
+                }
+            }
+
+            throw new JwkKidNotFoundException('JWK not found for kid ' . $kid);
+        } finally {
+            $this->authState->isLoading = false;
         }
-
-        throw new \Exception('Could not get public key for JWT');
-
     }
 
-    public function logout(string $token)
+    public function logout(string $jwt): bool
     {
-        $response = $this->apiClient->request('POST', 'logout', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $token,
-            ]
-        ]);
+        $this->authState->isLoading = true;
 
-        if($response->getStatusCode() !== 200) {
-            throw new \Exception($response->getBody());
+        try {
+
+            $request = $this->requestFactory->createRequest('POST', $this->authConfig->getApiUrl() . '/logout');
+            $request = $this->withDefaultHeaders($request, [
+                'Authorization' => 'Bearer ' . $jwt,
+            ]);
+
+            $response = $this->httpClient->sendRequest($request);
+            if ($response->getStatusCode() !== 200) {
+                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
+            }
+
+            return true;
+        } finally {
+            $this->authState->isLoading = false;
         }
     }
 }
