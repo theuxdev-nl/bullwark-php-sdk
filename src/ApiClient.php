@@ -2,18 +2,21 @@
 
 namespace BullwarkSdk;
 
+use BullwarkSdk\Exceptions\ApiRequestException;
 use BullwarkSdk\Exceptions\JwkKidNotFoundException;
+use BullwarkSdk\Support\CachedJwks;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-use BullwarkSdk\Exceptions\ApiRequestException;
 
 
 class ApiClient
 {
     private AuthConfig $authConfig;
     private AuthState $authState;
+
+    private CachedJwks $cachedJwks;
 
     private ClientInterface $httpClient;
     private RequestFactoryInterface $requestFactory;
@@ -144,29 +147,31 @@ class ApiClient
      */
     public function getPublicKey(string $kid): array
     {
-        $this->authState->isLoading = true;
+        if (isset($this->cachedJwks) && !$this->cachedJwks->isExpired()) {
+            $cachedJwk = $this->cachedJwks->getJWKByKid($kid) ?? null;
+            if ($cachedJwk) return $cachedJwk;
+        }
 
-        try {
+        $request = $this->requestFactory->createRequest('GET', $this->authConfig->getJwkUrl());
+        $request = $this->withDefaultHeaders($request);
 
-            $request = $this->requestFactory->createRequest('GET', $this->authConfig->getJwkUrl());
-            $request = $this->withDefaultHeaders($request);
+        $response = $this->httpClient->sendRequest($request);
+        if ($response->getStatusCode() !== 200) {
+            throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
+        }
 
-            $response = $this->httpClient->sendRequest($request);
-            if ($response->getStatusCode() !== 200) {
-                throw new ApiRequestException((string)$response->getBody(), $response->getStatusCode());
-            }
+        $data = json_decode($response->getBody(), true)['keys'];
 
-            $data = json_decode($response->getBody(), true)['keys'];
+        if (count($data) > 0) {
+            $this->cachedJwks = new CachedJwks($data, (time() + $this->authConfig->getCacheTtl()));
             foreach ($data as $d) {
                 if ($d['kid'] === $kid) {
                     return $d;
                 }
             }
-
-            throw new JwkKidNotFoundException('JWK not found for kid ' . $kid);
-        } finally {
-            $this->authState->isLoading = false;
         }
+
+        throw new JwkKidNotFoundException('JWK not found for kid ' . $kid);
     }
 
     public function logout(string $jwt): bool
