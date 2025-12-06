@@ -30,6 +30,11 @@ class AuthConfig
         return $this->tenantUuid ?? null;
     }
 
+    public function setTenantUuid(string $tenantUuid): void
+    {
+        $this->tenantUuid = $tenantUuid;
+    }
+
     public function getCustomerUuid(): ?string
     {
         return $this->customerUuid ?? null;

@@ -44,6 +44,11 @@ class BullwarkSdk
         }
     }
 
+    public function setTenantUuid(string $tenantUuid): void
+    {
+        $this->authConfig->setTenantUuid($tenantUuid);
+    }
+
     /**
      * @throws GuzzleException
      * @throws \Exception
