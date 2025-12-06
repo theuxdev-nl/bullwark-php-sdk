@@ -6,9 +6,12 @@ use BullwarkSdk\Exceptions\InvalidSignatureException;
 use BullwarkSdk\Exceptions\JwtExpiredException;
 use BullwarkSdk\Exceptions\TokenMalformedException;
 use BullwarkSdk\jwt\JwtVerifier;
-use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Psr7\HttpFactory;
+use Http\Discovery\Psr17FactoryDiscovery;
+use Http\Discovery\Psr18ClientDiscovery;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 
 class BullwarkSdk
 {
@@ -24,7 +27,10 @@ class BullwarkSdk
         string $tenantUuid,
         string $customerUuid,
         ?bool  $devMode = false,
-        ?int   $cacheTtl = 900
+        ?int   $cacheTtl = 900,
+        ?ClientInterface $httpClient = null,
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null
     )
     {
         $this->authConfig = new AuthConfig(
@@ -38,16 +44,17 @@ class BullwarkSdk
 
         $this->authState = new AuthState($this->authConfig);
 
-        // Create default HTTP client and factories
-        $httpClient = new Client();
-        $httpFactory = new HttpFactory();
+        // Use PSR Discovery to auto-detect HTTP client and factories if not provided
+        $httpClient = $httpClient ?? Psr18ClientDiscovery::find();
+        $requestFactory = $requestFactory ?? Psr17FactoryDiscovery::findRequestFactory();
+        $streamFactory = $streamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
 
         $this->apiClient = new ApiClient(
             $this->authConfig,
             $this->authState,
             $httpClient,
-            $httpFactory,
-            $httpFactory
+            $requestFactory,
+            $streamFactory
         );
         $this->abilityChecker = new AbilityChecker($this->authConfig, $this->authState);
         $this->jwtVerifier = new JwtVerifier($this->authConfig, $this->apiClient);

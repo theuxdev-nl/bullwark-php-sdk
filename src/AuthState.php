@@ -4,8 +4,6 @@ class AuthState {
     public bool $isLoggedIn;
     public bool $isLoading;
     public ?User $user;
-    public ?string $detailsHash;
-    public ?int $detailsHashSetAt;
     public ?string $storedJwtToken;
     public ?string $storedRefreshToken;
     public bool $isInitialized;
@@ -15,8 +13,6 @@ class AuthState {
         $this->authConfig = $authConfig;
         $this->isLoggedIn = false;
         $this->user = null;
-        $this->detailsHash = null;
-        $this->detailsHashSetAt = null;
         $this->storedJwtToken = null;
         $this->storedRefreshToken = null;
     }
