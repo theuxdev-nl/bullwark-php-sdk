@@ -53,31 +53,22 @@ class JwtVerifier
 
     }
 
-    /**
-     * @throws TokenMalformedException
-     */
     public function getJwtHeader(string $jwt): array
     {
         $parts = explode('.', $jwt);
-
         if (count($parts) !== 3) {
             throw new TokenMalformedException('Invalid JWT format');
         }
-
-        return $parts[0];
+        return json_decode($this->decode($parts[0]), true);
     }
 
-    /**
-     * @throws TokenMalformedException
-     */
     public function getJwtPayload(string $jwt): array
     {
         $parts = explode('.', $jwt);
         if (count($parts) !== 3) {
             throw new TokenMalformedException('Invalid JWT format');
         }
-
-        return $parts[1];
+        return json_decode($this->decode($parts[1]), true);
     }
 
     /**
