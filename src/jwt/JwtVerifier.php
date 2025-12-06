@@ -5,6 +5,7 @@ namespace BullwarkSdk\jwt;
 use BullwarkSdk\ApiClient;
 use BullwarkSdk\AuthConfig;
 use BullwarkSdk\Exceptions\InvalidSignatureException;
+use BullwarkSdk\Exceptions\JwkKidNotFoundException;
 use BullwarkSdk\Exceptions\JwtExpiredException;
 use BullwarkSdk\Exceptions\TokenMalformedException;
 use Firebase\JWT\ExpiredException;
@@ -27,8 +28,7 @@ class JwtVerifier
     /**
      * @throws InvalidSignatureException
      * @throws JwtExpiredException
-     * @throws GuzzleException
-     * @throws TokenMalformedException
+     * @throws TokenMalformedException|JwkKidNotFoundException
      */
     public function checkIfTokenValid(string $jwt): bool
     {
@@ -80,17 +80,12 @@ class JwtVerifier
         return $parts[1];
     }
 
-
-
-
-
     /**
      * @param string $jwtToken
      * @return array
      * @throws InvalidSignatureException
      * @throws JwtExpiredException
-     * @throws TokenMalformedException
-     * @throws GuzzleException
+     * @throws TokenMalformedException|JwkKidNotFoundException
      */
     public function getVerifiedTokenData(string $jwtToken): array
     {

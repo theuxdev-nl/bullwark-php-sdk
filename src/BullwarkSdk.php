@@ -67,6 +67,12 @@ class BullwarkSdk
         return true;
     }
 
+    public function getJwtPayload(string $jwt): array
+    {
+        $this->jwtVerifier->checkIfTokenValid($jwt);
+        return $this->jwtVerifier->getJwtPayload($jwt);
+    }
+
     /**
      * @throws InvalidSignatureException
      * @throws GuzzleException
@@ -77,17 +83,8 @@ class BullwarkSdk
     public function authenticate(string $jwt): bool
     {
         $this->invalidateSession();
-        $this->jwtVerifier->checkIfTokenValid($jwt);
-        $payload = $this->jwtVerifier->getJwtPayload($jwt);
-
-        if (
-            !isset($this->authState->user) ||
-            $this->authState->user->uuid !== $payload['userUuid'] ||
-            $this->authState->detailsHash !== $payload['detailsHash']) {
-
-            $userData = $this->apiClient->fetchUserDetails($jwt);
-            $this->authState->setUser($userData);
-        }
+        $payload = $this->getJwtPayload($jwt);
+        $this->authState->setUser($payload);
 
         $this->authState->storedJwtToken = $jwt;
         $this->authState->isLoggedIn = true;

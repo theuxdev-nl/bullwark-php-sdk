@@ -1,7 +1,6 @@
 <?php
 namespace BullwarkSdk;
 class AuthState {
-    private AuthConfig $authConfig;
     public bool $isLoggedIn;
     public bool $isLoading;
     public ?User $user;
@@ -26,38 +25,14 @@ class AuthState {
         return $this->user;
     }
 
-    public function setUser(?array $userData): ?User
+    public function setUser(array $payload): ?User
     {
-        if($userData === null) {
-            $this->user = null;
-            return null;
-        }
 
         $this->user = new User(
-            $userData['uuid'],
-            $userData['firstName'],
-            $userData['lastName'],
-            $userData['email'],
-            array_map(function($ability){
-                return new Ability(
-                    $ability['uuid'],
-                    $ability['key'],
-                    $ability['label']
-                );
-            }, $userData['abilities']),
-            array_map(function($role){
-                return new Role(
-                    $role['uuid'],
-                    $role['key'],
-                    $role['label']
-                );
-            }, $userData['roles']),
-            isset($userData['primaryRole']) ?
-                new Role(
-                    $userData['primaryRole']['uuid'],
-                    $userData['primaryRole']['key'],
-                    $userData['primaryRole']['label']
-                ) : null,
+            $payload['sub'],
+            $payload['https://bullwark.io/claims/abilities'],
+            $payload['https://bullwark.io/claims/roles'],
+            $payload['https://bullwark.io/claims/is_admin']
         );
         return $this->user;
     }
@@ -84,27 +59,5 @@ class AuthState {
     public function setStoredRefreshToken(?string $storedRefreshToken): void
     {
         $this->storedRefreshToken = $storedRefreshToken;
-    }
-
-    /**
-     * @param string|null $detailsHash
-     */
-    public function setDetailsHash(?string $detailsHash): void
-    {
-        $this->detailsHash = $detailsHash;
-        $this->detailsHashSetAt = $detailsHash != null ? time() : null;
-    }
-
-    public function isCacheExpired(): ?bool
-    {
-        if($this->detailsHashSetAt === null) return null;
-        return time() < ($this->detailsHashSetAt + $this->authConfig->getCacheTtl());
-    }
-
-    public function shouldFetchUserDetails(string $detailsHash): bool
-    {
-        return $this->getUser() === null ||
-            $this->isCacheExpired() ||
-            ($this->detailsHash !== null && $this->detailsHash !== $detailsHash);
     }
 }
