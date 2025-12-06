@@ -6,7 +6,9 @@ use BullwarkSdk\Exceptions\InvalidSignatureException;
 use BullwarkSdk\Exceptions\JwtExpiredException;
 use BullwarkSdk\Exceptions\TokenMalformedException;
 use BullwarkSdk\jwt\JwtVerifier;
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Psr7\HttpFactory;
 
 class BullwarkSdk
 {
@@ -35,7 +37,18 @@ class BullwarkSdk
         );
 
         $this->authState = new AuthState($this->authConfig);
-        $this->apiClient = new ApiClient($this->authConfig, $this->authState);
+
+        // Create default HTTP client and factories
+        $httpClient = new Client();
+        $httpFactory = new HttpFactory();
+
+        $this->apiClient = new ApiClient(
+            $this->authConfig,
+            $this->authState,
+            $httpClient,
+            $httpFactory,
+            $httpFactory
+        );
         $this->abilityChecker = new AbilityChecker($this->authConfig, $this->authState);
         $this->jwtVerifier = new JwtVerifier($this->authConfig, $this->apiClient);
 
