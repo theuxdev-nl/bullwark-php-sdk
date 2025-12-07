@@ -59,7 +59,14 @@ class JwtVerifier
         if (count($parts) !== 3) {
             throw new TokenMalformedException('Invalid JWT format');
         }
-        return json_decode($this->decode($parts[0]), true);
+        $decoded = $this->decode($parts[0]);
+        $header = json_decode($decoded, true);
+
+        if ($header === null) {
+            throw new TokenMalformedException('Failed to decode JWT header: ' . json_last_error_msg());
+        }
+
+        return $header;
     }
 
     public function getJwtPayload(string $jwt): array
@@ -68,7 +75,14 @@ class JwtVerifier
         if (count($parts) !== 3) {
             throw new TokenMalformedException('Invalid JWT format');
         }
-        return json_decode($this->decode($parts[1]), true);
+        $decoded = $this->decode($parts[1]);
+        $payload = json_decode($decoded, true);
+
+        if ($payload === null) {
+            throw new TokenMalformedException('Failed to decode JWT payload: ' . json_last_error_msg());
+        }
+
+        return $payload;
     }
 
     /**
@@ -130,6 +144,12 @@ class JwtVerifier
     {
         $padded = $data . str_repeat('=', (4 - strlen($data) % 4) % 4);
         $base64 = strtr($padded, '-_', '+/');
-        return base64_decode($base64);
+        $decoded = base64_decode($base64, true);
+
+        if ($decoded === false) {
+            throw new TokenMalformedException('Failed to base64 decode JWT segment');
+        }
+
+        return $decoded;
     }
 }
